@@ -17,6 +17,9 @@ String url = "https://script.google.com/macros/s/AKfycbwApU7xXiWK96RPd9GugsHOtBe
 
 #define DHTTYPE DHT22  
 
+#include "time.h"
+#include "sntp.h"
+
 #include <TridentTD_LineNotify.h>
 #include "BlynkEdgent.h"
 #include <HTTPClient.h>
@@ -24,9 +27,16 @@ String url = "https://script.google.com/macros/s/AKfycbwApU7xXiWK96RPd9GugsHOtBe
 #include <SPI.h>
 #include <DHT.h>
 
-int dirt_status,light_status,led_status,pump_status,dry_status;
+int dirt_status,light_status,led_status,light_send,pump_status,dry_status;
+
+int air_set,light_sensor,dirt_sensor,httpCode;
+
+int light_sensor_m = 0;
+int dirt_sensor_m = 0;
+
 DHT dht(DHTPIN, DHTTYPE);
 BlynkTimer timer;
+HTTPClient http;
 
 void setup(){
   Serial.begin(115200);
@@ -64,22 +74,59 @@ void wifi_connected(){
 }
 
 void getSheet(){
-  float h = dht.readHumidity();
-  float t = dht.readTemperature();
-  String urls = url + "?air_humidity=" + h + "&air_temp=" + t;
-
-  HTTPClient http;
-  http.begin(urls.c_str());  
-  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  int httpCode = http.GET();
-  if(httpCode == 200 || httpCode == 201) {
-    String content = http.getString();
-  }else{
-    Serial.println("Fail: " + String(httpCode));
-    }delay(2000);
+  if(air_set%15 == 0){
+    float h = dht.readHumidity();
+    float t = dht.readTemperature();
+    String urls = url + "?air_humidity=" + h + "&air_temp=" + t;
+    http.begin(urls.c_str());  
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    httpCode = http.GET();
   }
 
+  if(led_status==1 && light_sensor_m == 0){
+    light_sensor = 1;
+    String urls = url + "?light_status_id=" + light_status + "&sensor_status_id=" + light_sensor;
+    http.begin(urls.c_str());  
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    httpCode = http.GET();
+    light_sensor_m = 1;
+
+  }else if(led_status==0 && light_sensor_m == 1){
+    light_sensor = 2;
+    String urls = url + "?light_status_id=" + light_status + "&sensor_status_id=" + light_sensor;
+    http.begin(urls.c_str());  
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    httpCode = http.GET();
+    light_sensor_m = 0;
+  }
+
+  if(pump_status==1 && dirt_sensor_m == 0){
+    dirt_sensor = 1;
+    String urls = url + "?dirt_status_id=" + dirt_status + "&sensor_status_id=" + dirt_sensor;
+    http.begin(urls.c_str());  
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    httpCode = http.GET();
+    dirt_sensor_m = 1;
+  }else if(pump_status==0 && dirt_sensor_m == 1){
+    dirt_sensor = 2;
+    String urls = url + "?dirt_status_id=" + dirt_status + "&sensor_status_id=" + dirt_sensor;
+    http.begin(urls.c_str());  
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    httpCode = http.GET();
+    dirt_sensor_m = 0;
+  }
+
+  if(httpCode == 200 || httpCode == 201) {
+      String content = http.getString();
+    }else{
+      Serial.println("Fail: " + String(httpCode));
+      delay(1000);
+    }
+}
+
+
 void blynk_post(){
+  air_set = millis()/1000;
   float h = dht.readHumidity();
   float t = dht.readTemperature();
   float f = dht.readTemperature(true);
@@ -181,8 +228,12 @@ void dirtSensor(){
   float dirt_value = analogRead(DIRTPIN);
   Serial.printf("%d , %.2f\n",dirt_status,dirt_value);
   delay(300);
-
-  if(dirt_value>3500){//DIRT VERY DRY
+  if(dirt_value>=4095){//DIRT ERROR
+    digitalWrite(PUMP_PIN,LOW);
+    dirt_status = 0;
+    pump_status = 0;
+    dry_status = 0;
+  }else if(dirt_value>3500){//DIRT VERY DRY
     digitalWrite(PUMP_PIN,HIGH);
     dirt_status = 5;
     pump_status = 1;
