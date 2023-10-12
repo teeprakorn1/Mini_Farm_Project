@@ -12,13 +12,10 @@ String url = "https://script.google.com/macros/s/AKfycbwApU7xXiWK96RPd9GugsHOtBe
 #define DHTPIN 14
 #define DIRTPIN 32
 #define LIGHTPIN 33
-#define LED_PIN 4
+#define LAMP_PIN 4
 #define PUMP_PIN 5
 
 #define DHTTYPE DHT22  
-
-#include "time.h"
-#include "sntp.h"
 
 #include <TridentTD_LineNotify.h>
 #include "BlynkEdgent.h"
@@ -27,12 +24,14 @@ String url = "https://script.google.com/macros/s/AKfycbwApU7xXiWK96RPd9GugsHOtBe
 #include <SPI.h>
 #include <DHT.h>
 
-int dirt_status,light_status,led_status,light_send,pump_status,dry_status;
+int light_status,light_sensor,light_auto,light_manual,light_sensor_m;
+int lamp_status;
 
-int air_set,light_sensor,dirt_sensor,httpCode;
+int dirt_status,dirt_sensor,dirt_auto,dirt_manual,dirt_sensor_m;
+int pump_status;
 
-int light_sensor_m = 0;
-int dirt_sensor_m = 0;
+int air_set,httpCode;
+int defualt_value = 4095;
 
 DHT dht(DHTPIN, DHTTYPE);
 BlynkTimer timer;
@@ -42,7 +41,7 @@ void setup(){
   Serial.begin(115200);
   wifi_connected();
 
-  pinMode(LED_PIN, OUTPUT);
+  pinMode(LAMP_PIN, OUTPUT);
   pinMode(PUMP_PIN, OUTPUT);
   pinMode(DIRTPIN, INPUT);
   pinMode(LIGHTPIN,INPUT);
@@ -74,55 +73,82 @@ void wifi_connected(){
 }
 
 void getSheet(){
-  if(air_set%15 == 0){
+  light_status = IfLight();
+  dirt_status = IfDirt();
+  
+  //DHT Sensor Add Sheet.
+  if(air_set%30 == 0){
     float h = dht.readHumidity();
     float t = dht.readTemperature();
-    String urls = url + "?air_humidity=" + h + "&air_temp=" + t;
-    http.begin(urls.c_str());  
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    httpCode = http.GET();
+    String urls = setSheet("air_humidity", "air_temp", h, t);
+    goSheet(urls);
   }
 
-  if(led_status==1 && light_sensor_m == 0){
-    light_sensor = 1;
-    String urls = url + "?light_status_id=" + light_status + "&sensor_status_id=" + light_sensor;
-    http.begin(urls.c_str());  
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    httpCode = http.GET();
-    light_sensor_m = 1;
-
-  }else if(led_status==0 && light_sensor_m == 1){
-    light_sensor = 2;
-    String urls = url + "?light_status_id=" + light_status + "&sensor_status_id=" + light_sensor;
-    http.begin(urls.c_str());  
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    httpCode = http.GET();
-    light_sensor_m = 0;
-  }
-
-  if(pump_status==1 && dirt_sensor_m == 0){
-    dirt_sensor = 1;
-    String urls = url + "?dirt_status_id=" + dirt_status + "&sensor_status_id=" + dirt_sensor;
-    http.begin(urls.c_str());  
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    httpCode = http.GET();
-    dirt_sensor_m = 1;
-  }else if(pump_status==0 && dirt_sensor_m == 1){
-    dirt_sensor = 2;
-    String urls = url + "?dirt_status_id=" + dirt_status + "&sensor_status_id=" + dirt_sensor;
-    http.begin(urls.c_str());  
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    httpCode = http.GET();
-    dirt_sensor_m = 0;
-  }
-
-  if(httpCode == 200 || httpCode == 201) {
-      String content = http.getString();
-    }else{
-      Serial.println("Fail: " + String(httpCode));
-      delay(1000);
+  //Light Sensor Add Sheet.
+  if(light_auto==1){
+    if(lamp_status==1 && light_sensor_m == 0){
+      light_sensor = 1;
+      light_sensor_m = 1;
+      String urls = setSheet("light_status_id", "sensor_status_id", light_status, light_sensor);
+      goSheet(urls);
+    }else if(lamp_status==0 && light_sensor_m == 1){
+      light_sensor = 2;
+      light_sensor_m = 0;
+      String urls = setSheet("light_status_id", "sensor_status_id", light_status, light_sensor);
+      goSheet(urls);
     }
+  }else if(light_auto == 0 && light_sensor == 1){
+    light_sensor = 2;
+    light_sensor_m = 0;
+    String urls = setSheet("light_status_id", "sensor_status_id", light_status, light_sensor);
+    goSheet(urls);
+  }else{
+    if(light_manual == 1 && light_sensor_m == 0){
+      light_sensor = 3;
+      light_sensor_m = 1;
+      String urls = setSheet("light_status_id", "sensor_status_id", light_status, light_sensor);
+      goSheet(urls);
+    }else if(light_manual == 0 && light_sensor_m == 1){
+      light_sensor = 4;
+      light_sensor_m = 0;
+      String urls = setSheet("light_status_id", "sensor_status_id", light_status, light_sensor);
+      goSheet(urls);
+    }
+  }
+
+  //Dirt Sensor Add Sheet.
+  if(dirt_auto==1){
+    if(pump_status == 1 && dirt_sensor_m == 0){
+      dirt_sensor = 1;
+      dirt_sensor_m = 1;
+      String urls = setSheet("dirt_status_id", "sensor_status_id", dirt_status, dirt_sensor);
+      goSheet(urls);
+    }else if(pump_status == 0 && dirt_sensor_m == 1){
+      dirt_sensor = 2;
+      dirt_sensor_m = 0;
+      String urls = setSheet("dirt_status_id", "sensor_status_id", dirt_status, dirt_sensor);
+      goSheet(urls);
+    }
+  }else if(dirt_auto == 0 && dirt_sensor == 1){
+    dirt_sensor = 2;
+    dirt_sensor_m = 0;
+    String urls = setSheet("dirt_status_id", "sensor_status_id", dirt_status, dirt_sensor);
+    goSheet(urls);
+  }else{
+    if(dirt_manual == 1 && dirt_sensor_m == 0){
+      dirt_sensor = 3;
+      dirt_sensor_m = 1;
+      String urls = setSheet("dirt_status_id", "sensor_status_id", dirt_status, dirt_sensor);
+      goSheet(urls);
+    }else if(dirt_manual == 0 && dirt_sensor_m == 1){
+      dirt_sensor = 4;
+      dirt_sensor_m = 0;
+      String urls = setSheet("dirt_status_id", "sensor_status_id", dirt_status, dirt_sensor);
+      goSheet(urls);
+    }
+  }
 }
+
 
 
 void blynk_post(){
@@ -130,8 +156,8 @@ void blynk_post(){
   float h = dht.readHumidity();
   float t = dht.readTemperature();
   float f = dht.readTemperature(true);
-  float dirt_value = analogRead(DIRTPIN);
-  float light_value = analogRead(LIGHTPIN);
+  float dirt_value = CalPercent(analogRead(DIRTPIN), defualt_value);
+  float light_value = CalPercent(analogRead(LIGHTPIN), defualt_value);
 
   if (isnan(h) || isnan(t)|| isnan(f)) {
     Serial.println("Failed to read from DHT sensor!");
@@ -140,11 +166,8 @@ void blynk_post(){
 
   Blynk.virtualWrite(V1, h);
   Blynk.virtualWrite(V2, t);
-  Blynk.virtualWrite(V3, dirt_value/100);
-  Blynk.virtualWrite(V4, light_value/100);
-  Blynk.virtualWrite(V5, pump_status);
-  Blynk.virtualWrite(V6, led_status);
-  Blynk.virtualWrite(V7, dry_status);
+  Blynk.virtualWrite(V3, dirt_value);
+  Blynk.virtualWrite(V4, light_value);
 }
 
 BLYNK_WRITE(V0) {  
@@ -153,6 +176,8 @@ BLYNK_WRITE(V0) {
   float t = dht.readTemperature(); 
   float dirt_value = analogRead(DIRTPIN);
   float light_value = analogRead(LIGHTPIN);
+  light_status = IfLight();
+  dirt_status = IfDirt();
 
   if(value ==1){
     LINE.notify(">>>>>>>>>>>>>>>>>>>");
@@ -192,81 +217,185 @@ BLYNK_WRITE(V0) {
   }
 }
 
+BLYNK_WRITE(V6){
+  int value = param.asInt();
+  if(value ==1){
+    light_auto = 1;
+  }else if(value ==0){
+    light_auto = 0;
+  }
+}
+
+BLYNK_WRITE(V7){
+  int value = param.asInt();
+  if(value == 1){
+    dirt_auto = 1;
+  }else if(value == 0){
+    dirt_auto = 0;
+  }
+}
+
+BLYNK_WRITE(V8){
+  int value = param.asInt();
+  if(value == 1){
+    light_manual = 1;
+  }else if(value == 0){
+    light_manual = 0;
+  }
+}
+
+BLYNK_WRITE(V9){
+  int value = param.asInt();
+  if(value ==1){
+    dirt_manual = 1;
+  }else if(value == 0){
+    dirt_manual = 0;
+  }
+}
+
 void LightSensor(){
+  light_status = IfLight();
+
   float light_value = analogRead(LIGHTPIN);
   Serial.printf("LIGHT , %.2f\n",light_value);
   delay(300);
 
-  if(light_value>4095){//ERROR VALUE
-    digitalWrite(LED_PIN,LOW);
-    light_status = 0;
-    led_status = 0;
-  }else if(light_value>4094){//NO LIGHT VALUE
-    digitalWrite(LED_PIN,HIGH);
-    light_status = 4;
-    led_status = 1;
-  }else if(light_value>1500){//LOW LIGHT VALUE
-    digitalWrite(LED_PIN,HIGH);
-    light_status = 3;
-    led_status = 1;
-  }else if(light_value>1000){//MEDIUM LIGHT VALUE
-    digitalWrite(LED_PIN,LOW);
-    light_status = 2;
-    led_status = 0;
-  }else if(light_value>0){//HIGH LIGHT VALUE
-    digitalWrite(LED_PIN,LOW);
-    light_status = 1;
-    led_status = 0;
+  if(light_auto == 1){
+    if(light_status==0){//ERROR VALUE
+      digitalWrite(LAMP_PIN,LOW);
+      lamp_status = 0;
+    }else if(light_status==4){//NO LIGHT VALUE
+      digitalWrite(LAMP_PIN,HIGH);
+      lamp_status = 1;
+    }else if(light_status==3){//LOW LIGHT VALUE
+      digitalWrite(LAMP_PIN,HIGH);
+      lamp_status = 1;
+    }else if(light_status==2){//MEDIUM LIGHT VALUE
+      digitalWrite(LAMP_PIN,LOW);
+      lamp_status = 0;
+    }else if(light_status==1){//HIGH LIGHT VALUE
+      digitalWrite(LAMP_PIN,LOW);
+      lamp_status = 0;
+    }else{
+      digitalWrite(LAMP_PIN,LOW);
+      lamp_status = 0;
+    }
   }else{
-    digitalWrite(LED_PIN,LOW);
-    light_status = 0;
-    led_status = 0;
+    if(light_manual == 1){
+      digitalWrite(LAMP_PIN,HIGH);
+      lamp_status = 1;
+    }else{
+      digitalWrite(LAMP_PIN,LOW);
+      lamp_status = 0;
+    }
   }
 }
 
 void dirtSensor(){
+  dirt_status = IfDirt();
+
   float dirt_value = analogRead(DIRTPIN);
   Serial.printf("%d , %.2f\n",dirt_status,dirt_value);
   delay(300);
-  if(dirt_value>=4095){//DIRT ERROR
-    digitalWrite(PUMP_PIN,LOW);
-    dirt_status = 0;
-    pump_status = 0;
-    dry_status = 0;
-  }else if(dirt_value>3500){//DIRT VERY DRY
-    digitalWrite(PUMP_PIN,HIGH);
-    dirt_status = 5;
-    pump_status = 1;
-    dry_status = 1;
-  }else if(dirt_value>3000){//DIRT NORMAL DRY
-    digitalWrite(PUMP_PIN,HIGH);
-    dirt_status = 6;
-    pump_status = 1;
-    dry_status = 1;
-  }else if(dirt_value>2000){//DIRT NORMAL MOIST
-    digitalWrite(PUMP_PIN,LOW);
-    dirt_status = 4;
-    pump_status = 0;
-    dry_status = 0;
-    }else if(dirt_value>1500){//DIRT VERY MOIST
-    digitalWrite(PUMP_PIN,LOW);
-    dirt_status = 3;
-    pump_status = 0;
-    dry_status = 0;
-  }else if(dirt_value>500){//DIRL NORMAL WET
-    digitalWrite(PUMP_PIN,LOW);
-    dirt_status = 2;
-    pump_status = 0;
-    dry_status = 0;
-  }else if(dirt_value>0){//DIRL VERY WET
-    digitalWrite(PUMP_PIN,LOW);
-    dirt_status = 1;
-    pump_status = 0;
-    dry_status = 0;
-  }else{//DIRT ERROR
-    digitalWrite(PUMP_PIN,LOW);
-    dirt_status = 0;
-    pump_status = 0;
-    dry_status = 0;
+
+  if(dirt_auto == 1){
+    if(dirt_status=0){//DIRT ERROR
+      digitalWrite(PUMP_PIN,LOW);
+      pump_status = 0;
+    }else if(dirt_status==5){//DIRT VERY DRY
+      digitalWrite(PUMP_PIN,HIGH);
+      pump_status = 1;
+    }else if(dirt_status==6){//DIRT NORMAL DRY
+      digitalWrite(PUMP_PIN,HIGH);
+      pump_status = 1;
+    }else if(dirt_status==4){//DIRT NORMAL MOIST
+      digitalWrite(PUMP_PIN,LOW);
+      pump_status = 0;
+    }else if(dirt_status==3){//DIRT VERY MOIST
+      digitalWrite(PUMP_PIN,LOW);
+      pump_status = 0;
+    }else if(dirt_status==2){//DIRL NORMAL WET
+      digitalWrite(PUMP_PIN,LOW);
+      pump_status = 0;
+    }else if(dirt_status==1){//DIRL VERY WET
+      digitalWrite(PUMP_PIN,LOW);
+      pump_status = 0;
+    }else{//DIRT ERROR
+      digitalWrite(PUMP_PIN,LOW);
+      dirt_status = 0;
+    }
+  }else{
+    if(dirt_manual == 1){
+      digitalWrite(PUMP_PIN,HIGH);
+      dirt_status = 1;
+    }else{
+      digitalWrite(PUMP_PIN,LOW);
+      dirt_status = 0;
+    }
   }
+}
+
+float CalPercent(float i, float value) {
+  return (i * 100) / value;
+}
+
+String setSheet(String p1, String p2, int v1, int v2){
+  return (url + "?" + p1 + "=" + v1 + "&" + p2 + "=" + v2);
+}
+
+void goSheet(String i){
+  http.begin(i.c_str());  
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  httpCode = http.GET();
+
+  if(httpCode == 200 || httpCode == 201) {
+    String content = http.getString();
+  }else{
+    Serial.println("Fail: " + String(httpCode));
+    delay(1000);
+  }
+}
+
+int IfLight(){
+  float light_value = analogRead(LIGHTPIN);
+  int i;
+
+  if(light_value>4095){//ERROR VALUE
+      i = 0;
+    }else if(light_value>4094){//NO LIGHT VALUE
+      i = 4;
+    }else if(light_value>1500){//LOW LIGHT VALUE
+      i = 3;
+    }else if(light_value>1000){//MEDIUM LIGHT VALUE
+      i = 2;
+    }else if(light_value>0){//HIGH LIGHT VALUE
+      i = 1;
+    }else{
+      i = 0;
+    }
+    return i;
+}
+
+int IfDirt(){
+  float dirt_value = analogRead(DIRTPIN);
+  int i;
+
+  if(dirt_value>=4095){//DIRT ERROR
+    i = 0;
+  }else if(dirt_value>3500){//DIRT VERY DRY
+    i = 5;
+  }else if(dirt_value>3000){//DIRT NORMAL DRY
+    i = 6;
+  }else if(dirt_value>2000){//DIRT NORMAL MOIST
+    i = 4;
+  }else if(dirt_value>1500){//DIRT VERY MOIST
+    i = 3;
+  }else if(dirt_value>500){//DIRL NORMAL WET
+    i = 2;
+  }else if(dirt_value>0){//DIRL VERY WET
+    i = 1;
+  }else{//DIRT ERROR
+    i = 0;
+  }
+  return i;
 }
