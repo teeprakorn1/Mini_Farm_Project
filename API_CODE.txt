@@ -1,0 +1,45 @@
+var sheet_id = "18b0cK1bZ27pCE6wUmvwdKHQoy0Aew5FgavjsIUzFrzc";
+var sheet_name0 = "air_sensor";
+var sheet_name1 = "light_sensor";
+var sheet_name2 = "dirt_sensor";
+
+var ss = SpreadsheetApp.openById(sheet_id);
+var sheet0 = ss.getSheetByName(sheet_name0);
+var sheet1 = ss.getSheetByName(sheet_name1);
+var sheet2 = ss.getSheetByName(sheet_name2);
+
+function doGet(e) {
+  var parameters = e.parameter;
+
+  if ("air_humidity" in parameters && "air_temp" in parameters) {
+    var uuid = Utilities.getUuid();
+    var air_date = Utilities.formatDate(new Date(), "GMT+7", "dd/MM/yyyy");
+    var air_time = Utilities.formatDate(new Date(), "GMT+7", "HH:mm:ss");
+    var air_humidity = Number(parameters.air_humidity);
+    var air_temp = Number(parameters.air_temp);
+
+    sheet0.appendRow([uuid, air_date, air_time, air_humidity, air_temp]); // add data to air_sensor
+  }
+
+  if ("light_status_id" in parameters && "sensor_status_id" in parameters) {
+    var uuid = Utilities.getUuid();
+    var light_date = Utilities.formatDate(new Date(), "GMT+7", "dd/MM/yyyy");
+    var light_time = Utilities.formatDate(new Date(), "GMT+7", "HH:mm:ss");
+    var light_status_id = Number(parameters.light_status_id);
+    var sensor_status_id = Number(parameters.sensor_status_id);
+
+    sheet1.appendRow([uuid, light_date, light_time, light_status_id, sensor_status_id]); // add data to light_sensor
+  }
+
+  if ("dirt_status_id" in parameters && "sensor_status_id" in parameters) {
+    var uuid = Utilities.getUuid();
+    var dirt_date = Utilities.formatDate(new Date(), "GMT+7", "dd/MM/yyyy");
+    var dirt_time = Utilities.formatDate(new Date(), "GMT+7", "HH:mm:ss");
+    var dirt_status_id = Number(parameters.dirt_status_id);
+    var sensor_status_id = Number(parameters.sensor_status_id);
+
+    sheet2.appendRow([uuid, dirt_date, dirt_time, dirt_status_id, sensor_status_id]); // add data to dirt_sensor
+  }
+
+  return ContentService.createTextOutput("Data added successfully");
+}
