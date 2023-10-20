@@ -1,7 +1,7 @@
-#define WFID "AiyuT"
-#define PASSWORD "19652508"
+#define WFID "AISHomelink"
+#define PASSWORD "861053495"
 #define LINE_TOKEN "cDXyz51IQ6M8rdOr8SJmTbdqNZRNimj1jdTlKBRV5tA"
-String url = "https://script.google.com/macros/s/AKfycbwApU7xXiWK96RPd9GugsHOtBebiS4MJZwtodTbqlVzRPAwsJcJG57-hNBqG1C37YfI/exec";
+String url = "https://script.google.com/macros/s/AKfycbyjBzDddqieJfoM4A7hLP8awZRTx3qLtNFlglBpE8qavzKnEfdg633E6Fd2XxHfqBOyyw/exec";
 
 #define BLYNK_TEMPLATE_ID "TMPL6dehztIRR"
 #define BLYNK_TEMPLATE_NAME "LED"
@@ -60,7 +60,7 @@ void setup(){
   dht.begin();
   BlynkEdgent.begin();
   timer.setInterval(1000L, blynk_post);
-  LINE.notify("<<<---MINI-FARM-IOT-START--->>>");
+  Run_Start();
 }
 
 void loop(){
@@ -93,7 +93,7 @@ void getSheet(){
   dirt_status = IfDirt();
   
   //DHT Sensor Add Sheet.
-  if(air_set%60 == 0){
+  if(air_set%1800 == 0){
     float h = dht.readHumidity();
     float t = dht.readTemperature();
     String urls = setSheet("air_humidity", "air_temp", h, t);
@@ -205,7 +205,12 @@ void getSheet(){
       }
     }
   }
+}
 
+void Run_Start(){
+  LINE.notify("<<<---MINI-FARM-IOT-START--->>>");
+  String urls = setSheet("iot_status_id",1);
+  goSheet(urls);
 }
 
 void blynk_post(){
@@ -455,8 +460,8 @@ void dirtSensor(){
 void send_Line(){
   float h = dht.readHumidity();
   float t = dht.readTemperature(); 
-  float dirt_value = analogRead(DIRTPIN);
-  float light_value = analogRead(LIGHTPIN);
+  float dirt_value = CalPercent(analogRead(DIRTPIN), defualt_value);
+  float light_value = CalPercent(analogRead(LIGHTPIN), defualt_value);
   light_status = IfLight();
   dirt_status = IfDirt();
 
@@ -494,10 +499,17 @@ void send_Line(){
 
   LINE.notify(">>>>>>>>>>>>>>>>>>>");
   Serial.print("Done.Send to Line.\n");
+
+  String urls = setSheet("iot_status_id",2);
+  goSheet(urls);
 }
 
 float CalPercent(float i, float value) {
   return (i * 100) / value;
+}
+
+String setSheet(String p1, int v1){
+  return (url + "?" + p1 + "=" + v1);
 }
 
 String setSheet(String p1, String p2, int v1, int v2){
@@ -518,16 +530,16 @@ void goSheet(String i){
 }
 
 int IfLight(){
-  float light_value = analogRead(LIGHTPIN);
+  float light_value = CalPercent(analogRead(LIGHTPIN), defualt_value);
   int i;
 
-  if(light_value>4095){//ERROR VALUE
+  if(light_value>100){//ERROR VALUE
     i = 0;
-  }else if(light_value>4094){//NO LIGHT VALUE
+  }else if(light_value>60){//NO LIGHT VALUE
     i = 4;
-  }else if(light_value>1500){//LOW LIGHT VALUE
+  }else if(light_value>40){//LOW LIGHT VALUE
     i = 3;
-  }else if(light_value>1000){//MEDIUM LIGHT VALUE
+  }else if(light_value>20){//MEDIUM LIGHT VALUE
     i = 2;
   }else if(light_value>0){//HIGH LIGHT VALUE
     i = 1;
@@ -538,20 +550,20 @@ int IfLight(){
 }
 
 int IfDirt(){
-  float dirt_value = analogRead(DIRTPIN);
+  float dirt_value = CalPercent(analogRead(DIRTPIN), defualt_value);
   int i;
 
-  if(dirt_value>=4095){//DIRT ERROR
+  if(dirt_value>=100){//DIRT ERROR
     i = 0;
-  }else if(dirt_value>3500){//DIRT VERY DRY
+  }else if(dirt_value>70){//DIRT VERY DRY
     i = 5;
-  }else if(dirt_value>3000){//DIRT NORMAL DRY
+  }else if(dirt_value>50){//DIRT NORMAL DRY
     i = 6;
-  }else if(dirt_value>2000){//DIRT NORMAL MOIST
+  }else if(dirt_value>40){//DIRT NORMAL MOIST
     i = 4;
-  }else if(dirt_value>1500){//DIRT VERY MOIST
+  }else if(dirt_value>30){//DIRT VERY MOIST
     i = 3;
-  }else if(dirt_value>500){//DIRL NORMAL WET
+  }else if(dirt_value>15){//DIRL NORMAL WET
     i = 2;
   }else if(dirt_value>0){//DIRL VERY WET
     i = 1;
